@@ -30,6 +30,6 @@ setuptools.setup(
         "homepage":   "https://www.penterep.com/",
         "repository": "https://github.com/penterep/ptcookiechecker",
         "tracker":    "https://github.com/penterep/ptcookiechecker/issues",
-        "changelog":  "https://github.com/penterep/ptcookiechecker/CHANGELOG.md",
+        "changelog":  "https://github.com/penterep/ptcookiechecker/blob/main/CHANGELOG.md",
     }
 )
