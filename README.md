@@ -1,6 +1,6 @@
 [![penterepTools](https://www.penterep.com/external/penterepToolsLogo.png)](https://www.penterep.com/)
 
-## PTCOOKIECHECKER - Cookie Security Testing Tool
+# PTCOOKIECHECKER - Cookie Security Testing Tool
 
 ## Installation
 
