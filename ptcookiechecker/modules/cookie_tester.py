@@ -1,6 +1,10 @@
 from ptlibs import ptprinthelper, ptjsonlib
 import base64
+import string
 import re
+import urllib
+
+import requests
 
 
 class CookieTester:
@@ -14,11 +18,6 @@ class CookieTester:
     ["password", "Typical name for cookie with password", "sensitive","ERROR"]
 ]
 
-    COMMON_COOKIE_VALUES = [
-        ["PHP", [32, 26]],
-        ["ASP", 24],
-    ]
-
     def run(self, response, args, ptjsonlib: object, test_cookie_issues: bool = True, filter_cookie: str = None):
         self.ptjsonlib = ptjsonlib
         self.args = args
@@ -26,11 +25,16 @@ class CookieTester:
         self.filter_cookie = filter_cookie
         self.test_cookie_issues = test_cookie_issues
         self.base_indent = 2
+        self.set_cookie_list: list = self._get_set_cookie_headers(response)
+        self.duplicate_flags = None
 
-        set_cookie_list: list = self._get_set_cookie_headers(response)
+        for header, value in response.raw.headers.items():
+            if header.lower() == "set-cookie":
+                ptprinthelper.ptprint(ptprinthelper.get_colored_text(f"{value}", "ADDITIONS"), colortext="WARNING", condition=not self.use_json, indent=self.base_indent)
+
         cookie_list = response.cookies
 
-        if not cookie_list and not set_cookie_list:
+        if not cookie_list and not self.set_cookie_list:
             ptprinthelper.ptprint(f"Site returned no cookies", bullet_type="", condition=not self.use_json)
             return
 
@@ -38,13 +42,14 @@ class CookieTester:
             if self.filter_cookie and (self.filter_cookie.lower() != cookie.name.lower()):
                 continue
 
-            full_cookie: str = self._find_cookie_in_headers(cookie_list=set_cookie_list, cookie_to_find=f"{cookie.name}={cookie.value}") or cookie
+            full_cookie: str = self._find_cookie_in_headers(cookie_list=self.set_cookie_list, cookie_to_find=f"{cookie.name}={cookie.value}") or cookie
+            self.duplicate_flags = self.detect_duplicate_attributes(full_cookie)
 
             cookie_name = f"{cookie.name}={cookie.value}"
             cookie_path = cookie.path
             cookie_domain = cookie.domain
             cookie_expiration_timestamp = cookie.expires
-            expires_string = next((m.group(1) for m in [re.search(r'Expires=([^;]+)', full_cookie)] if m), None)
+            expires_string = next((m.group(1) for m in [re.search(r'Expires=([^;]+)', full_cookie, re.IGNORECASE)] if m), None)
             #cookie_expiration_text = next((item.split('=')[1] for item in full_cookie.split(":", maxsplit=1)[-1].strip().lower().split('; ') if item.lower().startswith('expires=')), None)
 
             cookie_secure_flag = cookie.secure
@@ -65,20 +70,11 @@ class CookieTester:
             if self.test_cookie_issues:
                 self.check_cookie_name(cookie.name)
 
-            ptprinthelper.ptprint(f"Value: {cookie.value}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
-            if self.is_base64(cookie.value):
-                ptprinthelper.ptprint(f"Decoded value: {repr(self.is_base64(cookie.value))[2:-1]}", bullet_type="ADDITIONS", condition=not self.use_json, indent=self.base_indent, colortext=True)
-
+            ptprinthelper.ptprint(f"Value: {urllib.parse.unquote(cookie.value)}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.test_cookie_issues:
-                self.check_cookie_value(cookie.value)
-
-            #ptprinthelper.ptprint(f"Header:", bullet_type="TEXT", condition=not self.use_json)
-            #ptprinthelper.ptprint(ptprinthelper.get_colored_text(full_cookie, "ADDITIONS"), condition=not self.use_json, indent=2)
-
-            """
-            ptprinthelper.ptprint(f"Name: {cookie.name}", bullet_type="TEXT", condition=not self.use_json)
-
-            """
+                self.check_cookie_value(urllib.parse.unquote(cookie.value))
+            if self.is_base64(urllib.parse.unquote(cookie.value)):
+                ptprinthelper.ptprint(f"Decoded value: {repr(self.is_base64(urllib.parse.unquote(cookie.value)))[2:-1]}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent, colortext=True)
 
             ptprinthelper.ptprint(f"Domain: {cookie_domain}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.test_cookie_issues:
@@ -94,9 +90,8 @@ class CookieTester:
 
             if self.test_cookie_issues:
                 ptprinthelper.ptprint(f"Flags: ", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
-                self.detect_duplicate_attributes(full_cookie)
-                self.check_cookie_secure_flag(cookie_secure_flag)
                 self.check_cookie_samesite_flag(cookie_samesite_flag)
+                self.check_cookie_secure_flag(cookie_secure_flag)
                 self.check_cookie_httponly_flag(cookie_http_flag)
             else:
                 ptprinthelper.ptprint(f"Flags: ", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
@@ -104,8 +99,9 @@ class CookieTester:
                 ptprinthelper.ptprint(f"    Secure: {cookie_secure_flag}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent+2)
                 ptprinthelper.ptprint(f"    HttpOnly: {cookie_http_flag}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent+2)
 
-    def print_flags(self, full_cookie: str):
-        cookie_flags = re.findall(r'(\w+)=([^;]+)', full_cookie)
+        self.test_cookie_accepts_random_values(url=response.url)
+        self.test_cookie_accepts_cookie_from_get_param(url=response.url)
+
 
     def detect_duplicate_attributes(self, cookie_string):
         attributes = [attr.strip() for attr in cookie_string.split(';')]
@@ -113,10 +109,8 @@ class CookieTester:
         for attr in attributes:
             key = attr.split('=')[0].strip().lower()  # Get the attribute name, case-insensitive
             attribute_counts[key] = attribute_counts.get(key, 0) + 1
-        duplicates = {key: count for key, count in attribute_counts.items() if count > 1}
-        if duplicates:
-            ptprinthelper.ptprint(f"Duplicate attributes detected: {list(duplicates.keys())}", bullet_type="VULN", condition=not self.use_json, indent=4)
-        return duplicates
+        duplicates = {key.lower(): count for key, count in attribute_counts.items() if count > 1}
+        return list(duplicates.keys())
 
     def _find_cookie_in_headers(self, cookie_list: list, cookie_to_find: str):
         for cookie in cookie_list:
@@ -124,26 +118,49 @@ class CookieTester:
                 return cookie
 
     def _get_set_cookie_headers(self, response):
-        """Returns Set-Cookie headers from raw response headers"""
+        """Returns Set-Cookie headers from <response.raw.headers>"""
         raw_cookies: list = []
         if [h for h in response.raw.headers.keys() if h.lower() == "set-cookie"]:
-            #ptprinthelper.ptprint(ptprinthelper.get_colored_text("Set-Cookie headers:", "ADDITIONS"), "", colortext="WARNING", condition=not self.use_json, indent=self.base_indent)
             for header, value in response.raw.headers.items():
                 if header.lower() == "set-cookie":
-                    ptprinthelper.ptprint(ptprinthelper.get_colored_text(f"{header}: {value}", "ADDITIONS"), colortext="WARNING", condition=not self.use_json, indent=self.base_indent)
                     raw_cookies.append(f"{header}: {value}")
         return raw_cookies
 
-    def _find_technology_by_cookie_value(self, cookie_value):
+    def _find_technology_by_cookie_value(self, cookie_value: str) -> list:
+        """
+        Determines which technologies a given cookie value matches based on defined rules.
+
+        The function checks the provided cookie value against predefined technology rules
+        in terms of length and format. If the cookie matches the rules for a technology,
+        the corresponding technology name is added to the result list.
+
+        Args:
+            cookie_value (str): The value of the cookie to be analyzed.
+
+        Returns:
+            list: A list of technology names that match the cookie value. If no match is found,
+                an empty list is returned.
+
+        Example:
+            >>> instance._find_technology_by_cookie_value("abc123def456gh789ijk012lmn345")
+            ["PHP"]
+
+            >>> instance._find_technology_by_cookie_value("ABCDEFGHIJKLMNO1234567890PQRST")
+            ["JAVA"]
+        """
+        COMMON_COOKIE_VALUES = {
+            "PHP": {"length": [26], "format": r"^[a-z0-9]+$"},
+            "ASP.NET": {"length": [24], "format": r"^[a-z0-9]+$"},
+            "JAVA": {"length": [32], "format": r"^[A-Z0-9]+$"},
+        }
+
         result: list = []
         cookie_len = len(cookie_value)
-        for technology_name, default_len in self.COMMON_COOKIE_VALUES:
-            if isinstance(default_len, list):
-                if cookie_len in default_len:
+        for technology_name, technology_attributes in COMMON_COOKIE_VALUES.items():
+            if cookie_len in technology_attributes["length"]:
+                if re.match(technology_attributes["format"], cookie_value):
                     result.append(technology_name)
-                    break
-            elif default_len == cookie_len:
-                result.append(technology_name)
+                    continue
         return result
 
     def _find_technology_by_cookie_name(self, cookie_name):
@@ -163,7 +180,7 @@ class CookieTester:
             technology_name, message, json_code, bullet_type = result
             vuln_code = "PTV-WEB-INFO-TEDEFSIDNAME"
             #self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
-            ptprinthelper.ptprint(f"Cookie has default name for {technology_name}", bullet_type=bullet_type, condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+            ptprinthelper.ptprint(f"Cookie has default name for {message}", bullet_type=bullet_type, condition=not self.use_json, colortext=False, indent=self.base_indent+2)
         if not cookie_name.startswith("__Host-"):
             ptprinthelper.ptprint(f"Cookie is missing '__Host-' prefix", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
             vuln_code = "PTV-WEB-LSCOO-HSTPREFSENS"
@@ -173,7 +190,7 @@ class CookieTester:
         result = self._find_technology_by_cookie_value(cookie_value)
         if result:
             vuln_code = "PTV-WEB-INFO-TEDEFSIDFRM"
-            ptprinthelper.ptprint(f"Cookie value length has default format for {result if len(result) > 1 else ', '.join(result)} technologies", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=4)
+            ptprinthelper.ptprint(f"Cookie value has default format for {result if len(result) > 1 else result[0]} session cookie", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=4)
             #self.ptjsonlib.add_vulnerability(vuln_code) if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
 
     def check_cookie_domain(self, cookie_domain: str):
@@ -187,7 +204,10 @@ class CookieTester:
             #self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
             ptprinthelper.ptprint(f"HttpOnly flag missing", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
         else:
-            ptprinthelper.ptprint(f"HttpOnly flag present", bullet_type="OK", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+            if "httponly" in self.duplicate_flags:
+                ptprinthelper.ptprint(f"HttpOnly flag duplicate", bullet_type="WARNING", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+            else:
+                ptprinthelper.ptprint(f"HttpOnly flag present", bullet_type="OK", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
 
     def check_cookie_samesite_flag(self, cookie_samesite_flag):
         if not cookie_samesite_flag:
@@ -195,8 +215,11 @@ class CookieTester:
             #self.ptjsonlib.add_vulnerability(vuln_code) if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
             ptprinthelper.ptprint(f"SameSite flag missing", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
         else:
-            # + hodnota
-            ptprinthelper.ptprint(f"SameSite={cookie_samesite_flag}", bullet_type="OK", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+            if "samesite" in self.duplicate_flags:
+                ptprinthelper.ptprint(f"SameSite duplicate", bullet_type="WARNING", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+            else:
+                _bullet = "OK" if not cookie_samesite_flag.lower() == "none" else "WARNING"
+                ptprinthelper.ptprint(f"SameSite={cookie_samesite_flag}", bullet_type=_bullet, condition=not self.use_json, colortext=False, indent=self.base_indent+2)
 
     def check_cookie_secure_flag(self, cookie_secure_flag):
         if not cookie_secure_flag:
@@ -204,11 +227,88 @@ class CookieTester:
             #self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
             ptprinthelper.ptprint(f"Secure flag missing", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
         else:
-            ptprinthelper.ptprint(f"Secure flag present", bullet_type="OK", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+            if "secure" in self.duplicate_flags:
+                ptprinthelper.ptprint(f"Secure flag duplicate", bullet_type="WARNING", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+            else:
+                ptprinthelper.ptprint(f"Secure flag present", bullet_type="OK", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
 
     def is_base64(self, value):
         try:
             if isinstance(value, str) and re.match('^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$', value): # Kontrola, zda hodnota odpovídá formátu Base64
-                return base64.b64decode(value, validate=True)
+                decoded_value = base64.b64decode(value, validate=True)
+                # Check if the decoded value is binary (contains non-printable characters)
+                if all(c in string.printable for c in decoded_value.decode('utf-8', errors='ignore')):
+                    return decoded_value  # Return the decoded value if it's printable
+                else:
+                    return None  # Return None if the result is binary (non-printable)
         except (base64.binascii.Error, TypeError):
             return False
+
+    def test_cookie_accepts_random_values(self, url: str):
+        """
+        Test if the target application accepts random values for cookies.
+
+        This method sends a request to the given URL of the target application with cookies
+        set to random values. It then checks the application's response to determine if the
+        application sets new values for the cookies or if it allows arbitrary values to be
+        set. If the application does not set a new value for any cookie, an error is raised
+        indicating that the application is vulnerable to accepting arbitrary cookie values.
+
+        Args:
+            url (str): The URL of the target application to send the request to for cookie validation.
+
+        Raises:
+            AssertionError: If the target application does not set new values for cookies, indicating
+                            potential cookie tampering vulnerabilities.
+        """
+
+        all_cookie_names_and_values = self._get_all_cookie_names_and_values(set_cookie_list=self.set_cookie_list)
+        _values = []
+        cookies_to_send = dict()
+        for cookie in all_cookie_names_and_values:
+            random_string = self.repeat_with_max_len("foobar", len(cookie[1]))
+            cookies_to_send.update({cookie[0]: random_string})
+            _values.append(random_string)
+        response = requests.get(url, params=cookies_to_send, proxies = self.args.proxy, verify=False)
+        set_cookie_list: list = self._get_set_cookie_headers(response)
+        for cookie in self._get_all_cookie_names_and_values(set_cookie_list):
+            if cookie[1] in _values:
+                ptprinthelper.ptprint(f"Aplikace přebírá v cookie libovolnou hodnotu", bullet_type="VULN", condition=not self.use_json, indent=(self.base_indent), newline_above=True)
+                # TODO: Add json vuln
+                return
+
+    def test_cookie_accepts_cookie_from_get_param(self, url):
+        all_cookie_names_and_values = self._get_all_cookie_names_and_values(set_cookie_list=self.set_cookie_list)
+        cookies_to_send = dict()
+        for cookie in all_cookie_names_and_values:
+            cookies_to_send.update({cookie[0]: cookie[1]})
+        response = requests.get(url, params=cookies_to_send, proxies = self.args.proxy, verify=False)
+        for cookie_name, _ in all_cookie_names_and_values:
+            if cookie_name not in [c[0] for c in self._get_all_cookie_names_and_values(self._get_set_cookie_headers(response))]:
+                ptprinthelper.ptprint(f"Aplikace přebírá hodnotu cookie z GET parametru", bullet_type="VULN", condition=not self.use_json, indent=(self.base_indent))
+                # TODO: Add json vuln
+
+                for cookie in all_cookie_names_and_values:
+                    cookies_to_send.update({cookie[0]: "foobar123"})
+                response = requests.get(url, params=cookies_to_send, proxies = self.args.proxy, verify=False)
+                if "foobar123" in [c[0].lower() for c in self._get_all_cookie_names_and_values(self._get_set_cookie_headers(response))]:
+                    # TODO: add vuln
+                    ptprinthelper.ptprint(f"“Aplikace nastavuje do cookie hodnotu předanou v GET parametru", bullet_type="VULN", condition=not self.use_json, indent=(self.base_indent))
+                return
+
+    def _get_all_cookie_names(self, set_cookie_list: list) -> list:
+        """Returns list of all cookie names parsed from response headers."""
+        return [re.match(r"set-cookie: (\S+)=.*", header, re.IGNORECASE).group(1) for header in set_cookie_list if re.match(r"set-cookie: (\S+)=.*", header, re.IGNORECASE)]
+
+    def _get_all_cookie_names_and_values(self, set_cookie_list: list) -> list:
+        """Returns a list of tuples containing cookie names and their corresponding values parsed from response headers."""
+        return [
+            (match.group(1), match.group(2))
+            for header in set_cookie_list
+            if (match := re.match(r"set-cookie: (\S+)=([^;]+)", header, re.IGNORECASE))
+        ]
+
+    def repeat_with_max_len(self, base_string="foobar", max_len=40):
+        # Repeat the base string enough times to exceed the max length
+        repeated = (base_string * (max_len // len(base_string))) + base_string[:max_len % len(base_string)]
+        return repeated

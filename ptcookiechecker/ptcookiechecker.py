@@ -32,7 +32,6 @@ from ptlibs import ptjsonlib, ptprinthelper, ptmisclib, ptnethelper
 from modules.cookie_tester import CookieTester
 
 
-
 class PtCookieChecker:
 
     def __init__(self, args):
@@ -41,20 +40,19 @@ class PtCookieChecker:
         self.use_json    = args.json
         self.timeout     = args.timeout
         self.cache       = args.cache
-        self.proxies     = {"http": args.proxy, "https": args.proxy}
         self.args        = args
 
     def run(self, args) -> None:
         response, dump = self.send_request(args.url)
         CookieTester().run(response, args, self.ptjsonlib, test_cookie_issues=not args.list_cookies_only, filter_cookie=args.cookie_name)
-
         self.ptjsonlib.set_status("finished")
         ptprinthelper.ptprint(self.ptjsonlib.get_result_json(), "", self.use_json)
+
 
     def send_request(self, url: str) -> requests.models.Response:
         ptprinthelper.ptprint(f"Testing cookies for URL: {url}", bullet_type="TITLE", condition=not self.use_json, flush=True, colortext=True, end=" ")
         try:
-            response, response_dump = ptmisclib.load_url_from_web_or_temp(url, method="GET", headers=self.headers, proxies=self.proxies, timeout=self.timeout, redirects=True, verify=False, cache=self.cache, dump_response=True)
+            response, response_dump = ptmisclib.load_url_from_web_or_temp(url, method="GET", headers=self.headers, proxies=self.args.proxy, timeout=self.timeout, redirects=True, verify=False, cache=self.cache, dump_response=True)
             ptprinthelper.ptprint(f"[{response.status_code}]", condition=not self.use_json, colortext=False)
             return response, response_dump
         except requests.RequestException:
@@ -108,6 +106,8 @@ def parse_args():
         sys.exit(0)
 
     args = parser.parse_args()
+    
+    args.proxy = {"http": args.proxy, "https": args.proxy} if args.proxy else None
 
     args.timeout = args.timeout if not args.proxy else None
     ptprinthelper.print_banner(SCRIPTNAME, __version__, args.json)
