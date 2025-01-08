@@ -36,7 +36,6 @@ class PtCookieChecker:
 
     def __init__(self, args):
         self.ptjsonlib   = ptjsonlib.PtJsonLib()
-        self.headers     = ptnethelper.get_request_headers(args)
         self.use_json    = args.json
         self.timeout     = args.timeout
         self.cache       = args.cache
@@ -52,7 +51,7 @@ class PtCookieChecker:
     def send_request(self, url: str) -> requests.models.Response:
         ptprinthelper.ptprint(f"Testing cookies for URL: {url}", bullet_type="TITLE", condition=not self.use_json, flush=True, colortext=True, end=" ")
         try:
-            response, response_dump = ptmisclib.load_url_from_web_or_temp(url, method="GET", headers=self.headers, proxies=self.args.proxy, timeout=self.timeout, redirects=True, verify=False, cache=self.cache, dump_response=True)
+            response, response_dump = ptmisclib.load_url_from_web_or_temp(url, method="GET", headers=self.args.headers, proxies=self.args.proxy, timeout=self.timeout, redirects=True, verify=False, cache=self.cache, dump_response=True)
             ptprinthelper.ptprint(f"[{response.status_code}]", condition=not self.use_json, colortext=False)
             return response, response_dump
         except requests.RequestException:
@@ -106,7 +105,7 @@ def parse_args():
         sys.exit(0)
 
     args = parser.parse_args()
-    
+    args.headers = ptnethelper.get_request_headers(args)
     args.proxy = {"http": args.proxy, "https": args.proxy} if args.proxy else None
 
     args.timeout = args.timeout if not args.proxy else None
