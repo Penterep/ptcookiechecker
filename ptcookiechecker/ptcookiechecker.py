@@ -47,7 +47,6 @@ class PtCookieChecker:
         self.ptjsonlib.set_status("finished")
         ptprinthelper.ptprint(self.ptjsonlib.get_result_json(), "", self.use_json)
 
-
     def send_request(self, url: str) -> requests.models.Response:
         ptprinthelper.ptprint(f"Testing cookies for URL: {url}", bullet_type="TITLE", condition=not self.use_json, flush=True, colortext=True, end=" ")
         try:
@@ -57,7 +56,6 @@ class PtCookieChecker:
         except requests.RequestException:
             ptprinthelper.ptprint(f"[error]", condition=not self.use_json, colortext=False)
             self.ptjsonlib.end_error(f"Cannot connect to server", self.use_json)
-
 
 def get_help():
     return [
@@ -86,7 +84,7 @@ def get_help():
 def parse_args():
     parser = argparse.ArgumentParser(add_help="False")
     parser.add_argument("-u",      "--url",               type=str, required=True)
-    parser.add_argument("-c",      "--cookie-name",        type=str)
+    parser.add_argument("-c",      "--cookie-name",       type=str)
     parser.add_argument("-p",      "--proxy",             type=str)
     parser.add_argument("-l",      "--list-cookies-only", action="store_true")
     parser.add_argument("-a",      "--user-agent",        type=str, default="Penterep Tools")

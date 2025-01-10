@@ -25,13 +25,18 @@ class CookieTester:
         self.use_json = False
         self.filter_cookie = filter_cookie
         self.test_cookie_issues = test_cookie_issues
-        self.base_indent = 2
-        self.set_cookie_list: List[str] = self._get_set_cookie_headers(response)
+        self.base_indent = 4
         self.duplicate_flags = None
+        self.set_cookie_list: List[str] = self._get_set_cookie_headers(response)
+
+        # Lists of vulnerable cookies
+        cookie_injection_from_headers: list = self.check_cookie_injection_from_headers(url=response.url)
+        cookie_acceptance_from_get_params: list = self.check_cookie_acceptance_from_get_param(url=response.url)
+        cookie_injection_from_get_params: list = self.check_cookie_injection_from_get_param(url=response.url) if cookie_acceptance_from_get_params else []
 
         for header, value in response.raw.headers.items():
             if header.lower() == "set-cookie":
-                ptprinthelper.ptprint(ptprinthelper.get_colored_text(f"Set-Cookie: {value}", "ADDITIONS"), colortext="WARNING", condition=not self.use_json, indent=(self.base_indent+2))
+                ptprinthelper.ptprint(ptprinthelper.get_colored_text(f"Set-Cookie: {value}", "ADDITIONS"), colortext="WARNING", condition=not self.use_json, indent=(self.base_indent))
 
         cookie_list = response.cookies
 
@@ -100,9 +105,12 @@ class CookieTester:
                 ptprinthelper.ptprint(f"    Secure: {cookie_secure_flag}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent+2)
                 ptprinthelper.ptprint(f"    HttpOnly: {cookie_http_flag}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent+2)
 
-        self.test_cookie_accepts_random_values(url=response.url)
-        self.test_cookie_accepts_cookie_from_get_param(url=response.url)
-
+            if cookie.name in cookie_injection_from_headers:
+                ptprinthelper.ptprint(f"Application accepts any value from cookie", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent), colortext=True)
+            if cookie.name in cookie_acceptance_from_get_params:
+                ptprinthelper.ptprint(f"Application accepts cookie value from GET parameter", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent), colortext=True)
+            if cookie.name in cookie_injection_from_get_params:
+                ptprinthelper.ptprint(f"Application sets any value passed in GET parameter into the cookie ", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent), colortext=True)
 
     def detect_duplicate_attributes(self, cookie_string):
         attributes = [attr.strip() for attr in cookie_string.split(';')]
@@ -245,7 +253,7 @@ class CookieTester:
         except (base64.binascii.Error, TypeError):
             return False
 
-    def test_cookie_accepts_random_values(self, url: str):
+    def check_cookie_injection_from_headers(self, url: str):
         """
         Tests if the application accepts arbitrary values in cookies.
 
@@ -265,42 +273,31 @@ class CookieTester:
         cookies_list1 = [cookie[0] for cookie in extracted_cookies]
         cookies_list2 = [cookie[0] for cookie in self._extract_cookie_names_and_values(self._get_set_cookie_headers(response))]
         missing_cookies = [cookie for cookie in cookies_list1 if cookie not in cookies_list2]
+        return missing_cookies
 
+    def check_cookie_acceptance_from_get_param(self, url) -> list:
+        """Check if the application accepts cookie values passed via GET parameters."""
+        extracted_cookies = self._extract_cookie_names_and_values(set_cookie_list=self.set_cookie_list)
+        cookies_to_send = {cookie_name: cookie_value for cookie_name, cookie_value in extracted_cookies}
 
-        self._cookie_accepts_random_values = False
-        if missing_cookies:
-            ptprinthelper.ptprint(f"Application accepts any value from {'cookies' if len(missing_cookies) > 1 else 'cookie'}: {', '.join(missing_cookies)}", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent), newline_above=True)
-            self._cookie_accepts_random_values = True
-            # TODO: JSON VULN
-
-    def test_cookie_accepts_cookie_from_get_param(self, url):
-        """Tests if the application accepts cookie values passed via GET parameters."""
-        _test1_printed = False
-        extracted_cookies: List[Tuple[str, str]] = self._extract_cookie_names_and_values(set_cookie_list=self.set_cookie_list)
-        cookies_to_send: dict = {cookie_name: cookie_value for cookie_name, cookie_value in extracted_cookies}
-
-        # Send request to URL with cookies in GET query
+        # Send request with cookies in GET query
         response = requests.get(url, params=cookies_to_send, proxies=self.args.proxy, verify=False)
-        response_cookie_names: list = [c[0] for c in self._extract_cookie_names_and_values(self._get_set_cookie_headers(response))]
-        vuln_cookie_names: list = [cookie_name for cookie_name, _ in extracted_cookies if cookie_name not in response_cookie_names]
-        if vuln_cookie_names:
-            ptprinthelper.ptprint(f"Application accepts cookie value from GET parameter ({', '.join(vuln_cookie_names)})", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent), newline_above=(not self._cookie_accepts_random_values))
-            _test1_printed = True
-            # TODO: JSON VULN
+        response_cookie_names = [c[0] for c in self._extract_cookie_names_and_values(self._get_set_cookie_headers(response))]
+        vuln_cookies = [cookie_name for cookie_name, _ in extracted_cookies if cookie_name not in response_cookie_names]
+        return vuln_cookies
 
-        # Send request to URL with cookies with random values in GET query
-        for cookie_name, cookie_value in cookies_to_send.items():
-            cookies_to_send[cookie_name] = ''.join(random.choices(string.ascii_letters+string.digits, k=len(cookie_value)))
-        response = requests.get(url, params=cookies_to_send, proxies = self.args.proxy, verify=False)
-        response_cookies: List[Tuple[str, str]] = self._extract_cookie_names_and_values(self._get_set_cookie_headers(response))
+    def check_cookie_injection_from_get_param(self, url) -> list:
+        """Check if the application sets cookie values passed via GET parameters into the response."""
+        extracted_cookies = self._extract_cookie_names_and_values(set_cookie_list=self.set_cookie_list)
+        cookies_to_send = {cookie_name: ''.join(random.choices(string.ascii_letters + string.digits, k=len(cookie_value))) for cookie_name, cookie_value in extracted_cookies}
 
-        vuln_cookies: list = []
-        for cookie_name, cookie_value in response_cookies:
-            if cookie_value == cookies_to_send.get(cookie_name):
-                vuln_cookies.append(cookie_name)
-        if vuln_cookies:
-            ptprinthelper.ptprint(f"Application sets value passed in GET parameter into the cookie ({', '.join(vuln_cookies)})", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent), newline_above=(True if not self._cookie_accepts_random_values and not _test1_printed else False))
-            # TODO: JSON VULN
+        # Send request with cookies in GET query
+        response = requests.get(url, params=cookies_to_send, proxies=self.args.proxy, verify=False)
+        response_cookies = self._extract_cookie_names_and_values(self._get_set_cookie_headers(response))
+
+        vuln_cookies = [cookie_name for cookie_name, cookie_value in response_cookies if cookie_value == cookies_to_send.get(cookie_name)]
+        return vuln_cookies
+
 
     def _get_all_cookie_names(self, set_cookie_list: list) -> list:
         """Returns list of all cookie names parsed from response headers."""
