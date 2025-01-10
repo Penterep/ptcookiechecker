@@ -101,9 +101,9 @@ class CookieTester:
                 self.check_cookie_httponly_flag(cookie_http_flag)
             else:
                 ptprinthelper.ptprint(f"Flags: ", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
-                ptprinthelper.ptprint(f"    SameSite: {cookie_samesite_flag}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent+2)
-                ptprinthelper.ptprint(f"    Secure: {cookie_secure_flag}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent+2)
-                ptprinthelper.ptprint(f"    HttpOnly: {cookie_http_flag}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent+2)
+                ptprinthelper.ptprint(f"    SameSite: {cookie_samesite_flag}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent+4)
+                ptprinthelper.ptprint(f"    Secure: {cookie_secure_flag}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent+4)
+                ptprinthelper.ptprint(f"    HttpOnly: {cookie_http_flag}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent+4)
 
             if cookie.name in cookie_injection_from_headers:
                 ptprinthelper.ptprint(f"Application accepts any value from cookie", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent), colortext=True)
@@ -189,9 +189,9 @@ class CookieTester:
             technology_name, message, json_code, bullet_type = result
             vuln_code = "PTV-WEB-INFO-TEDEFSIDNAME"
             #self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
-            ptprinthelper.ptprint(f"Cookie has default name for {message}", bullet_type=bullet_type, condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+            ptprinthelper.ptprint(f"Cookie has default name for {message}", bullet_type=bullet_type, condition=not self.use_json, colortext=False, indent=self.base_indent+4)
         if not cookie_name.startswith("__Host-"):
-            ptprinthelper.ptprint(f"Cookie is missing '__Host-' prefix", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+            ptprinthelper.ptprint(f"Cookie is missing '__Host-' prefix", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
             vuln_code = "PTV-WEB-LSCOO-HSTPREFSENS"
             #self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
 
@@ -199,47 +199,47 @@ class CookieTester:
         result = self._find_technology_by_cookie_value(cookie_value)
         if result:
             vuln_code = "PTV-WEB-INFO-TEDEFSIDFRM"
-            ptprinthelper.ptprint(f"Cookie value has default format for {result if len(result) > 1 else result[0]} session cookie", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=4)
+            ptprinthelper.ptprint(f"Cookie value has default format for {result if len(result) > 1 else result[0]} session cookie", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
             #self.ptjsonlib.add_vulnerability(vuln_code) if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
 
     def check_cookie_domain(self, cookie_domain: str):
         if cookie_domain.startswith("."):
-            ptprinthelper.ptprint(f"Overscoped cookie issue", bullet_type="WARNING", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+            ptprinthelper.ptprint(f"Overscoped cookie issue", bullet_type="WARNING", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
 
 
     def check_cookie_httponly_flag(self, cookie_http_flag):
         if not cookie_http_flag:
             vuln_code = "PTV-WEB-LSCOO-FLHTTPSENS"
             #self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
-            ptprinthelper.ptprint(f"HttpOnly flag missing", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+            ptprinthelper.ptprint(f"HttpOnly flag missing", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
         else:
             if "httponly" in self.duplicate_flags:
-                ptprinthelper.ptprint(f"HttpOnly flag duplicate", bullet_type="WARNING", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+                ptprinthelper.ptprint(f"HttpOnly flag duplicate", bullet_type="WARNING", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
             else:
-                ptprinthelper.ptprint(f"HttpOnly flag present", bullet_type="OK", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+                ptprinthelper.ptprint(f"HttpOnly flag present", bullet_type="OK", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
 
     def check_cookie_samesite_flag(self, cookie_samesite_flag):
         if not cookie_samesite_flag:
             vuln_code = "PTV-WEB-LSCOO-FLSAMESENS"
             #self.ptjsonlib.add_vulnerability(vuln_code) if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
-            ptprinthelper.ptprint(f"SameSite flag missing", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+            ptprinthelper.ptprint(f"SameSite flag missing", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
         else:
             if "samesite" in self.duplicate_flags:
-                ptprinthelper.ptprint(f"SameSite duplicate", bullet_type="WARNING", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+                ptprinthelper.ptprint(f"SameSite duplicate", bullet_type="WARNING", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
             else:
                 _bullet = "OK" if not cookie_samesite_flag.lower() == "none" else "WARNING"
-                ptprinthelper.ptprint(f"SameSite={cookie_samesite_flag}", bullet_type=_bullet, condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+                ptprinthelper.ptprint(f"SameSite={cookie_samesite_flag}", bullet_type=_bullet, condition=not self.use_json, colortext=False, indent=self.base_indent+4)
 
     def check_cookie_secure_flag(self, cookie_secure_flag):
         if not cookie_secure_flag:
             vuln_code = "PTV-WEB-LSCOO-FLSAMESENS"
             #self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
-            ptprinthelper.ptprint(f"Secure flag missing", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+            ptprinthelper.ptprint(f"Secure flag missing", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
         else:
             if "secure" in self.duplicate_flags:
-                ptprinthelper.ptprint(f"Secure flag duplicate", bullet_type="WARNING", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+                ptprinthelper.ptprint(f"Secure flag duplicate", bullet_type="WARNING", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
             else:
-                ptprinthelper.ptprint(f"Secure flag present", bullet_type="OK", condition=not self.use_json, colortext=False, indent=self.base_indent+2)
+                ptprinthelper.ptprint(f"Secure flag present", bullet_type="OK", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
 
     def is_base64(self, value):
         try:
