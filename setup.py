@@ -21,7 +21,7 @@ setuptools.setup(
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)"
     ],
     python_requires='>=3.9',
-    install_requires=["ptlibs>=1.0.8,<2"],
+    install_requires=["ptlibs>=1.0.15,<2"],
     entry_points = {'console_scripts': ['ptcookiechecker = ptcookiechecker.ptcookiechecker:main']},
     include_package_data= True,
     long_description=long_description,
