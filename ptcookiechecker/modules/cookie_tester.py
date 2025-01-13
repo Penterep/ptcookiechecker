@@ -24,7 +24,7 @@ class CookieTester:
         self.args = args
         self.use_json = False
         self.filter_cookie = filter_cookie
-        self.test_cookie_issues = test_cookie_issues
+        self.test_cookie_issues: bool = test_cookie_issues
         self.base_indent = 4
         self.duplicate_flags = None
         self.set_cookie_list: List[str] = self._get_set_cookie_headers(response)
@@ -74,13 +74,22 @@ class CookieTester:
 
             ptprinthelper.ptprint(f'Name: {ptprinthelper.get_colored_text(cookie.name, "TITLE")}', condition=not self.use_json, newline_above=True, indent=self.base_indent)
             if self.test_cookie_issues:
-                self.check_cookie_name(cookie.name)
+                self.check_default_cookie_name(cookie.name)
 
             ptprinthelper.ptprint(f"Value: {urllib.parse.unquote(cookie.value)}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
-            if self.test_cookie_issues:
-                self.check_cookie_value(urllib.parse.unquote(cookie.value))
             if self.is_base64(urllib.parse.unquote(cookie.value)):
-                ptprinthelper.ptprint(f"Decoded value: {repr(self.is_base64(urllib.parse.unquote(cookie.value)))[2:-1]}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent, colortext=True)
+                ptprinthelper.ptprint(f"Decoded value: {repr(self.is_base64(urllib.parse.unquote(cookie.value)))[2:-1]}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
+            if self.test_cookie_issues:
+                self.check_default_cookie_value(urllib.parse.unquote(cookie.value))
+
+            if self.test_cookie_issues:
+                # Cookie injection tests
+                if cookie.name in cookie_injection_from_headers:
+                    ptprinthelper.ptprint(f"Application accepts any value from cookie", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent+4))
+                if cookie.name in cookie_acceptance_from_get_params:
+                    ptprinthelper.ptprint(f"Application accepts cookie value from GET parameter", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent+4))
+                if cookie.name in cookie_injection_from_get_params:
+                    ptprinthelper.ptprint(f"Application sets any value passed in GET parameter into the cookie ", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent+4))
 
             ptprinthelper.ptprint(f"Domain: {cookie_domain}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.test_cookie_issues:
@@ -90,7 +99,7 @@ class CookieTester:
             if self.test_cookie_issues:
                 self.check_cookie_path(cookie_path)
 
-            ptprinthelper.ptprint(f"Expires: {expires_string if expires_string else cookie_expiration_timestamp}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
+            ptprinthelper.ptprint(f"Expire: {expires_string if expires_string else cookie_expiration_timestamp}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.test_cookie_issues:
                 self.check_cookie_expiration(cookie_expiration_timestamp)
 
@@ -104,13 +113,6 @@ class CookieTester:
                 ptprinthelper.ptprint(f"    SameSite: {cookie_samesite_flag}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent+4)
                 ptprinthelper.ptprint(f"    Secure: {cookie_secure_flag}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent+4)
                 ptprinthelper.ptprint(f"    HttpOnly: {cookie_http_flag}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent+4)
-
-            if cookie.name in cookie_injection_from_headers:
-                ptprinthelper.ptprint(f"Application accepts any value from cookie", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent), colortext=True)
-            if cookie.name in cookie_acceptance_from_get_params:
-                ptprinthelper.ptprint(f"Application accepts cookie value from GET parameter", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent), colortext=True)
-            if cookie.name in cookie_injection_from_get_params:
-                ptprinthelper.ptprint(f"Application sets any value passed in GET parameter into the cookie ", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent), colortext=True)
 
     def detect_duplicate_attributes(self, cookie_string):
         attributes = [attr.strip() for attr in cookie_string.split(';')]
@@ -183,7 +185,7 @@ class CookieTester:
     def check_cookie_path(self, cookie_path: str):
         pass
 
-    def check_cookie_name(self, cookie_name: str):
+    def check_default_cookie_name(self, cookie_name: str):
         result = self._find_technology_by_cookie_name(cookie_name)
         if result:
             technology_name, message, json_code, bullet_type = result
@@ -195,7 +197,7 @@ class CookieTester:
             vuln_code = "PTV-WEB-LSCOO-HSTPREFSENS"
             #self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
 
-    def check_cookie_value(self, cookie_value: str):
+    def check_default_cookie_value(self, cookie_value: str):
         result = self._find_technology_by_cookie_value(cookie_value)
         if result:
             vuln_code = "PTV-WEB-INFO-TEDEFSIDFRM"
