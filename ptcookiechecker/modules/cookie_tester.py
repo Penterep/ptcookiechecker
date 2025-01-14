@@ -1,23 +1,25 @@
-from ptlibs import ptprinthelper, ptjsonlib
 import base64
 import string
 import random
 import re
 import urllib
 
-import requests
+from ptlibs import ptprinthelper, ptjsonlib
 from typing import List, Tuple
+from http.cookies import SimpleCookie
+import requests
+
+
+try:
+    from ptcookiechecker.modules.cookie_rules import COMMON_COOKIES
+except ImportError:
+    from modules.cookie_rules import COMMON_COOKIES
+
+
 
 class CookieTester:
     def __init__(self):
-        pass
-
-    COMMON_COOKIE_NAMES = [
-    ["PHPSESSID", "PHP session cookie", "SESSION", "ERROR"],
-    ["JSESSIONID", "Java session cookie", "SESSION", "ERROR"],
-    ["Lang", "Standard cookie for save of set language", "standard","INFO"],
-    ["password", "Typical name for cookie with password", "sensitive","ERROR"]
-]
+        self.COMMON_COOKIES = COMMON_COOKIES
 
     def run(self, response, args, ptjsonlib: object, test_cookie_issues: bool = True, filter_cookie: str = None):
         self.ptjsonlib = ptjsonlib
@@ -29,16 +31,20 @@ class CookieTester:
         self.duplicate_flags = None
         self.set_cookie_list: List[str] = self._get_set_cookie_headers(response)
 
-        # Lists of vulnerable cookies
-        cookie_injection_from_headers: list = self.check_cookie_injection_from_headers(url=response.url)
-        cookie_acceptance_from_get_params: list = self.check_cookie_acceptance_from_get_param(url=response.url)
-        cookie_injection_from_get_params: list = self.check_cookie_injection_from_get_param(url=response.url) if cookie_acceptance_from_get_params else []
+        # Cookie injection tests
+        if self.test_cookie_issues:
+            cookie_injection_from_headers: list = self.check_cookie_injection_from_headers(url=response.url)
+            cookie_acceptance_from_get_params: list = self.check_cookie_acceptance_from_get_param(url=response.url)
+            cookie_injection_from_get_params: list = self.check_cookie_injection_from_get_param(url=response.url) if cookie_acceptance_from_get_params else []
 
+        # Print Set-Cookie:
         for header, value in response.raw.headers.items():
             if header.lower() == "set-cookie":
                 ptprinthelper.ptprint(ptprinthelper.get_colored_text(f"Set-Cookie: {value}", "ADDITIONS"), colortext="WARNING", condition=not self.use_json, indent=(self.base_indent))
 
         cookie_list = response.cookies
+
+        self._bypass_cookiejar_restrictions(response, set_cookie_list=self.set_cookie_list)
 
         if not cookie_list and not self.set_cookie_list:
             ptprinthelper.ptprint(f"Site returned no cookies", bullet_type="", condition=not self.use_json)
@@ -47,14 +53,16 @@ class CookieTester:
         for cookie in cookie_list:
             if self.filter_cookie and (self.filter_cookie.lower() != cookie.name.lower()):
                 continue
+            full_cookie: str = self._find_cookie_in_headers(cookie_list=self.set_cookie_list, cookie_to_find=f"{cookie.name}={cookie.value}") or str(cookie)
 
-            full_cookie: str = self._find_cookie_in_headers(cookie_list=self.set_cookie_list, cookie_to_find=f"{cookie.name}={cookie.value}") or cookie
+            _is_custom_cookie = cookie._rest.get("isCustomCookie", False) # True if added forcefully via custom function
+
             self.duplicate_flags = self.detect_duplicate_attributes(full_cookie)
-
+            cookie_max_age = self._get_max_age_from_cookie(full_cookie)
             cookie_name = f"{cookie.name}={cookie.value}"
             cookie_path = cookie.path
             cookie_domain = cookie.domain
-            cookie_expiration_timestamp = cookie.expires
+            cookie_expiration_timestamp = self._get_expires_from_cookie(full_cookie) # cookie.expires if not _is_custom_cookie else self._get_expires_from_cookie(full_cookie)
             expires_string = next((m.group(1) for m in [re.search(r'Expires=([^;]+)', full_cookie, re.IGNORECASE)] if m), None)
             #cookie_expiration_text = next((item.split('=')[1] for item in full_cookie.split(":", maxsplit=1)[-1].strip().lower().split('; ') if item.lower().startswith('expires=')), None)
 
@@ -67,22 +75,22 @@ class CookieTester:
                 "path": cookie_path,
                 "domain": cookie_domain,
                 "cookieExpiration": cookie_expiration_timestamp,
+                "cookieMaxAge": cookie_max_age,
                 "cookieSecureFlag": cookie_secure_flag,
                 "cookieHttpOnlyFlag": cookie_http_flag,
                 "cookieSameSiteFlag": cookie_samesite_flag
             }, vulnerabilities=[])
 
-            ptprinthelper.ptprint(f'Name: {ptprinthelper.get_colored_text(cookie.name, "TITLE")}', condition=not self.use_json, newline_above=True, indent=self.base_indent)
+            ptprinthelper.ptprint(f'Name:   {ptprinthelper.get_colored_text(cookie.name, "TITLE")}', condition=not self.use_json, newline_above=True, indent=self.base_indent)
             if self.test_cookie_issues:
-                self.check_default_cookie_name(cookie.name)
+                self.check_cookie_name(cookie.name)
 
-            ptprinthelper.ptprint(f"Value: {urllib.parse.unquote(cookie.value)}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
+            ptprinthelper.ptprint(f"Value:  {urllib.parse.unquote(cookie.value)}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.is_base64(urllib.parse.unquote(cookie.value)):
                 ptprinthelper.ptprint(f"Decoded value: {repr(self.is_base64(urllib.parse.unquote(cookie.value)))[2:-1]}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.test_cookie_issues:
-                self.check_default_cookie_value(urllib.parse.unquote(cookie.value))
+                self.check_cookie_value(urllib.parse.unquote(cookie.value))
 
-            if self.test_cookie_issues:
                 # Cookie injection tests
                 if cookie.name in cookie_injection_from_headers:
                     ptprinthelper.ptprint(f"Application accepts any value from cookie", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent+4))
@@ -95,13 +103,16 @@ class CookieTester:
             if self.test_cookie_issues:
                 self.check_cookie_domain(cookie_domain)
 
-            ptprinthelper.ptprint(f"Path: {cookie_path}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
+            ptprinthelper.ptprint(f"Path:   {cookie_path}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.test_cookie_issues:
                 self.check_cookie_path(cookie_path)
 
             ptprinthelper.ptprint(f"Expire: {expires_string if expires_string else cookie_expiration_timestamp}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.test_cookie_issues:
                 self.check_cookie_expiration(cookie_expiration_timestamp)
+
+            if cookie_max_age:
+                ptprinthelper.ptprint(f"Max-Age: {cookie_max_age}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
 
             if self.test_cookie_issues:
                 ptprinthelper.ptprint(f"Flags: ", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
@@ -151,33 +162,21 @@ class CookieTester:
         Returns:
             list: A list of technology names that match the cookie value. If no match is found,
                 an empty list is returned.
-
-        Example:
-            >>> instance._find_technology_by_cookie_value("abc123def456gh789ijk012lmn345")
-            ["PHP"]
-
-            >>> instance._find_technology_by_cookie_value("ABCDEFGHIJKLMNO1234567890PQRST")
-            ["JAVA"]
         """
-        COMMON_COOKIE_VALUES = {
-            "PHP": {"length": [26], "format": r"^[a-z0-9]+$"},
-            "ASP.NET": {"length": [24], "format": r"^[a-z0-9]+$"},
-            "JAVA": {"length": [32], "format": r"^[A-Z0-9]+$"},
-        }
-
         result: list = []
-        cookie_len = len(cookie_value)
-        for technology_name, technology_attributes in COMMON_COOKIE_VALUES.items():
-            if cookie_len in technology_attributes["length"]:
-                if re.match(technology_attributes["format"], cookie_value):
-                    result.append(technology_name)
-                    continue
+        for cookie in self.COMMON_COOKIES:
+            if "rules" in cookie and "value_format" in cookie["rules"]:
+                cookie_value_pattern = cookie["rules"]["value_format"] + "$" if not cookie["rules"]["value_format"].endswith('$') else cookie["rules"]["value_format"]
+                if re.match(cookie_value_pattern, cookie_value):
+                    result.append(cookie["description"])
         return result
 
     def _find_technology_by_cookie_name(self, cookie_name):
-        for technology_name, message, json_code, bullet_type in self.COMMON_COOKIE_NAMES:
-            if technology_name.lower() == cookie_name.lower():
-                return (technology_name, message, json_code, bullet_type)
+        for cookie in self.COMMON_COOKIES:
+            cookie_name_pattern = cookie["name"] + "$" if not cookie["name"].endswith('$') else cookie["name"]
+            if re.match(cookie_name_pattern, cookie_name, re.IGNORECASE):
+                return (cookie.get("technology"), cookie["description"], "ERROR", "ERROR")
+        return None
 
     def check_cookie_expiration(self, expires):
         pass
@@ -185,23 +184,24 @@ class CookieTester:
     def check_cookie_path(self, cookie_path: str):
         pass
 
-    def check_default_cookie_name(self, cookie_name: str):
+    def check_cookie_name(self, cookie_name: str):
         result = self._find_technology_by_cookie_name(cookie_name)
         if result:
             technology_name, message, json_code, bullet_type = result
+            ptprinthelper.ptprint(f"Cookie has default name for {message}", bullet_type=bullet_type, condition=not self.use_json, colortext=False, indent=self.base_indent+4)
             vuln_code = "PTV-WEB-INFO-TEDEFSIDNAME"
             #self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
-            ptprinthelper.ptprint(f"Cookie has default name for {message}", bullet_type=bullet_type, condition=not self.use_json, colortext=False, indent=self.base_indent+4)
+
         if not cookie_name.startswith("__Host-"):
             ptprinthelper.ptprint(f"Cookie is missing '__Host-' prefix", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
             vuln_code = "PTV-WEB-LSCOO-HSTPREFSENS"
             #self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
 
-    def check_default_cookie_value(self, cookie_value: str):
+    def check_cookie_value(self, cookie_value: str):
         result = self._find_technology_by_cookie_value(cookie_value)
         if result:
             vuln_code = "PTV-WEB-INFO-TEDEFSIDFRM"
-            ptprinthelper.ptprint(f"Cookie value has default format for {result if len(result) > 1 else result[0]} session cookie", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
+            ptprinthelper.ptprint(f"Cookie value has default format of {', '.join(result) if len(result) > 1 else result[0]}", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
             #self.ptjsonlib.add_vulnerability(vuln_code) if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
 
     def check_cookie_domain(self, cookie_domain: str):
@@ -269,7 +269,7 @@ class CookieTester:
         """
 
         extracted_cookies: List[Tuple] = self._extract_cookie_names_and_values(set_cookie_list=self.set_cookie_list)
-        cookies_to_send = {cookie[0]: ''.join(random.choices(string.ascii_letters+string.digits, k=len(cookie[1]))) for cookie in extracted_cookies}
+        cookies_to_send = {cookie[0]: ''.join(random.choices(string.ascii_letters+string.digits, k=len(cookie[1]) if len(cookie[1]) >= 1 else 10)) for cookie in extracted_cookies}
         response = requests.get(url=url, cookies=cookies_to_send, headers=self.args.headers, proxies=self.args.proxy, verify=False)
 
         cookies_list1 = [cookie[0] for cookie in extracted_cookies]
@@ -283,7 +283,7 @@ class CookieTester:
         cookies_to_send = {cookie_name: cookie_value for cookie_name, cookie_value in extracted_cookies}
 
         # Send request with cookies in GET query
-        response = requests.get(url, params=cookies_to_send, proxies=self.args.proxy, verify=False)
+        response = requests.get(url, params=cookies_to_send, headers=self.args.headers, proxies=self.args.proxy, verify=False)
         response_cookie_names = [c[0] for c in self._extract_cookie_names_and_values(self._get_set_cookie_headers(response))]
         vuln_cookies = [cookie_name for cookie_name, _ in extracted_cookies if cookie_name not in response_cookie_names]
         return vuln_cookies
@@ -291,7 +291,7 @@ class CookieTester:
     def check_cookie_injection_from_get_param(self, url) -> list:
         """Check if the application sets cookie values passed via GET parameters into the response."""
         extracted_cookies = self._extract_cookie_names_and_values(set_cookie_list=self.set_cookie_list)
-        cookies_to_send = {cookie_name: ''.join(random.choices(string.ascii_letters + string.digits, k=len(cookie_value))) for cookie_name, cookie_value in extracted_cookies}
+        cookies_to_send = {cookie_name: ''.join(random.choices(string.ascii_letters + string.digits, k=len(cookie_value) if len(cookie_value) >= 1 else 10)) for cookie_name, cookie_value in extracted_cookies}
 
         # Send request with cookies in GET query
         response = requests.get(url, params=cookies_to_send, proxies=self.args.proxy, verify=False)
@@ -307,9 +307,65 @@ class CookieTester:
 
     def _extract_cookie_names_and_values(self, set_cookie_list: list) -> List[Tuple[str, str]]:
         """Returns a list of tuples containing cookie names and their corresponding values parsed from response headers."""
-        return [(match.group(1), match.group(2)) for header in set_cookie_list if (match := re.match(r"set-cookie: (\S+?)=([^;]+)", header, re.IGNORECASE))]
+        return [(match.group(1), match.group(2)) for header in set_cookie_list if (match := re.match(r"set-cookie: (\S+?)=([^;]*)", header, re.IGNORECASE))]
 
     def repeat_with_max_len(self, base_string="foobar", max_len=40):
         # Repeat the base string enough times to exceed the max length
         repeated = (base_string * (max_len // len(base_string))) + base_string[:max_len % len(base_string)]
         return repeated
+
+
+    def _bypass_cookiejar_restrictions(self, response, set_cookie_list) -> None:
+        """
+        Adds cookies to the response's CookieJar, bypassing standard restrictions.
+
+        This function ensures that cookies, which would typically be excluded due
+        to conditions such as `Max-Age=0` are forcefully added to the provided response's CookieJar.
+        """
+
+        for cookie_name, cookie_value in self._extract_cookie_names_and_values(set_cookie_list=self.set_cookie_list):
+            # Check if this cookie is not in response.cookies
+            if not any(f"{cookie_name}={cookie_value}" in str(cookie) for cookie in response.cookies):
+                full_cookie: str = self._find_cookie_in_headers(cookie_list=self.set_cookie_list, cookie_to_find=f"{cookie_name}={cookie_value}") or str(cookie)
+                full_cookie: str = re.sub(r"SameSite(?!=[\w-]+)", "SameSite=_PLACEHOLDER", full_cookie, flags=re.IGNORECASE)
+                full_cookie: str = re.sub(r"set-cookie:", "", full_cookie, flags=re.IGNORECASE).lstrip()
+
+                simple_cookie = SimpleCookie(full_cookie)
+                for key, morsel in simple_cookie.items():
+                    _rest = {"isCustomCookie": True} # Add custom flag for Expires extraction.
+                    httponly = morsel.get("httponly")
+                    samesite = morsel.get("samesite")
+                    if httponly:
+                        _rest.update({"HttpOnly": None})
+                    if samesite:
+                        if samesite == "_PLACEHOLDER":
+                            _rest.update({"SameSite": None}) # default behaviour if no value provided. SimpleCookie wont be without attribute so we use temporary placeholder.
+                        else:
+                            _rest.update({"SameSite": samesite})
+
+                    cookie_obj = requests.cookies.create_cookie(
+                        name=key,
+                        value=morsel.value,
+                        path=morsel['path'] if morsel['path'] else "/",
+                        domain=morsel.get("domain") if morsel.get("domain") else response.url.split("//", 1)[-1].split("/")[0],
+                        secure=morsel.get("secure", False),
+                        rest=_rest
+                    )
+
+                    response.cookies.set_cookie(cookie_obj)
+
+
+    def _get_max_age_from_cookie(self, full_cookie):
+        _max_age_match = re.search(r"max-age.*?=(.*?);", full_cookie, re.IGNORECASE)
+        cookie_max_age = _max_age_match.groups()[0] if _max_age_match else None
+        try:
+            cookie_max_age = int(cookie_max_age)
+            cookie_max_age = f"{cookie_max_age} ({round(cookie_max_age/86400)} days)"
+            return cookie_max_age
+        except:
+            return cookie_max_age
+
+    def _get_expires_from_cookie(self, full_cookie):
+        _expires = re.search(r"expires.*?=(.*?);", full_cookie, re.IGNORECASE)
+        cookie_expires = _expires.groups()[0] if _expires else None
+        return cookie_expires
