@@ -81,11 +81,11 @@ class CookieTester:
                 "cookieSameSiteFlag": cookie_samesite_flag
             }, vulnerabilities=[])
 
-            ptprinthelper.ptprint(f'Name:   {ptprinthelper.get_colored_text(cookie.name, "TITLE")}', condition=not self.use_json, newline_above=True, indent=self.base_indent)
+            ptprinthelper.ptprint(f'Name: {ptprinthelper.get_colored_text(cookie.name, "TITLE")}', condition=not self.use_json, newline_above=True, indent=self.base_indent)
             if self.test_cookie_issues:
                 self.check_cookie_name(cookie.name)
 
-            ptprinthelper.ptprint(f"Value:  {urllib.parse.unquote(cookie.value)}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
+            ptprinthelper.ptprint(f"Value: {urllib.parse.unquote(cookie.value)}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.is_base64(urllib.parse.unquote(cookie.value)):
                 ptprinthelper.ptprint(f"Decoded value: {repr(self.is_base64(urllib.parse.unquote(cookie.value)))[2:-1]}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.test_cookie_issues:
@@ -103,7 +103,7 @@ class CookieTester:
             if self.test_cookie_issues:
                 self.check_cookie_domain(cookie_domain)
 
-            ptprinthelper.ptprint(f"Path:   {cookie_path}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
+            ptprinthelper.ptprint(f"Path: {cookie_path}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.test_cookie_issues:
                 self.check_cookie_path(cookie_path)
 
