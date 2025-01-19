@@ -107,7 +107,7 @@ class CookieTester:
             if self.test_cookie_issues:
                 self.check_cookie_path(cookie_path)
 
-            ptprinthelper.ptprint(f"Expire: {expires_string if expires_string else cookie_expiration_timestamp}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
+            ptprinthelper.ptprint(f"Expires: {expires_string if expires_string else cookie_expiration_timestamp}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.test_cookie_issues:
                 self.check_cookie_expiration(cookie_expiration_timestamp)
 
