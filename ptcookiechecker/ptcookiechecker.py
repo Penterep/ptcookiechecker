@@ -21,8 +21,8 @@
 import argparse
 import re
 import sys; sys.path.append(__file__.rsplit("/", 1)[0])
+
 import urllib
-from http.cookies import SimpleCookie
 
 import requests
 
