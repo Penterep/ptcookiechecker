@@ -63,7 +63,7 @@ class CookieTester:
             cookie_path = cookie.path
             cookie_domain = cookie.domain
             cookie_expiration_timestamp = self._get_expires_from_cookie(full_cookie) # cookie.expires if not _is_custom_cookie else self._get_expires_from_cookie(full_cookie)
-            expires_string = next((m.group(1) for m in [re.search(r'Expires=([^;]+)', full_cookie, re.IGNORECASE)] if m), None)
+            expires_string = next((m.group(1) for m in [re.search(r'Expires=([^;]+)', full_cookie, re.IGNORECASE)] if m), "")
             #cookie_expiration_text = next((item.split('=')[1] for item in full_cookie.split(":", maxsplit=1)[-1].strip().lower().split('; ') if item.lower().startswith('expires=')), None)
 
             cookie_secure_flag = cookie.secure
@@ -81,11 +81,11 @@ class CookieTester:
                 "cookieSameSiteFlag": cookie_samesite_flag
             }, vulnerabilities=[])
 
-            ptprinthelper.ptprint(f'Name: {ptprinthelper.get_colored_text(cookie.name, "TITLE")}', condition=not self.use_json, newline_above=True, indent=self.base_indent)
+            ptprinthelper.ptprint(f'Name:   {ptprinthelper.get_colored_text(cookie.name, "TITLE")}', condition=not self.use_json, newline_above=True, indent=self.base_indent)
             if self.test_cookie_issues:
                 self.check_cookie_name(cookie.name)
 
-            ptprinthelper.ptprint(f"Value: {urllib.parse.unquote(cookie.value)}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
+            ptprinthelper.ptprint(f"Value:  {urllib.parse.unquote(cookie.value)}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.is_base64(urllib.parse.unquote(cookie.value)):
                 ptprinthelper.ptprint(f"Decoded value: {repr(self.is_base64(urllib.parse.unquote(cookie.value)))[2:-1]}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.test_cookie_issues:
@@ -103,16 +103,16 @@ class CookieTester:
             if self.test_cookie_issues:
                 self.check_cookie_domain(cookie_domain)
 
-            ptprinthelper.ptprint(f"Path: {cookie_path}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
+            ptprinthelper.ptprint(f"Path:   {cookie_path}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.test_cookie_issues:
                 self.check_cookie_path(cookie_path)
 
-            ptprinthelper.ptprint(f"Expires: {expires_string if expires_string else cookie_expiration_timestamp}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
+            ptprinthelper.ptprint(f"Expires:{expires_string if expires_string else cookie_expiration_timestamp}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
             if self.test_cookie_issues:
                 self.check_cookie_expiration(cookie_expiration_timestamp)
 
             if cookie_max_age:
-                ptprinthelper.ptprint(f"Max-Age: {cookie_max_age}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
+                ptprinthelper.ptprint(f"Max-Age:{cookie_max_age}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
 
             if self.test_cookie_issues:
                 ptprinthelper.ptprint(f"Flags: ", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
@@ -367,5 +367,5 @@ class CookieTester:
 
     def _get_expires_from_cookie(self, full_cookie):
         _expires = re.search(r"expires.*?=(.*?);", full_cookie, re.IGNORECASE)
-        cookie_expires = _expires.groups()[0] if _expires else None
+        cookie_expires = _expires.groups()[0] if _expires else ""
         return cookie_expires
