@@ -50,11 +50,11 @@ class CookieTester:
             ptprinthelper.ptprint(f"Site returned no cookies", bullet_type="", condition=not self.use_json)
             return
 
-        for cookie in cookie_list:
+        for index, cookie in enumerate(cookie_list):
             if self.filter_cookie and (self.filter_cookie.lower() != cookie.name.lower()):
                 continue
-            full_cookie: str = self._find_cookie_in_headers(cookie_list=self.set_cookie_list, cookie_to_find=f"{cookie.name}={cookie.value}") or str(cookie)
 
+            full_cookie: str = self._find_cookie_in_headers(cookie_list=self.set_cookie_list, cookie_to_find=f"{cookie.name}={cookie.value}") or str(cookie)
             _is_custom_cookie = cookie._rest.get("isCustomCookie", False) # True if added forcefully via custom function
 
             self.duplicate_flags = self.detect_duplicate_attributes(full_cookie)
@@ -81,7 +81,7 @@ class CookieTester:
                 "cookieSameSiteFlag": cookie_samesite_flag
             }, vulnerabilities=[])
 
-            ptprinthelper.ptprint(f'Name:   {ptprinthelper.get_colored_text(cookie.name, "TITLE")}', condition=not self.use_json, newline_above=True, indent=self.base_indent)
+            ptprinthelper.ptprint(f'Name:   {ptprinthelper.get_colored_text(cookie.name, "TITLE")}', condition=not self.use_json, newline_above=True if index > 0 else False, indent=self.base_indent)
             if self.test_cookie_issues:
                 self.check_cookie_name(cookie.name)
 
