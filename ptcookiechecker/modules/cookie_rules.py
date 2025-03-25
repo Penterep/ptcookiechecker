@@ -33,13 +33,6 @@ COMMON_COOKIES = [
         "rules": {"value_format": r"^[a-z0-9]{24}$"},
     },
     {
-        "name": "ASP",
-        "description": "ASP session cookie",
-        "category": "SESSION",
-        "severity": "ERROR",
-        "rules": {"value_format": r"^[A-Z]{24}$"},
-    },
-    {
         "name": r"^ASPSESSIONID[A-Z0-9]{8}$",
         "description": "ASP session (IIS >= 6.0)",
         "category": "SESSION",
@@ -50,5 +43,12 @@ COMMON_COOKIES = [
         "description": "ASP session (IIS <= 5.0)",
         "category": "SESSION",
         "severity": "ERROR",
+    },
+    {
+        "name": "ASP",
+        "description": "ASP session cookie",
+        "category": "SESSION",
+        "severity": "ERROR",
+        "rules": {"value_format": r"^[A-Z]{24}$"},
     },
 ]

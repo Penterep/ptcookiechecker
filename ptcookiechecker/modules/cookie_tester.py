@@ -9,26 +9,25 @@ from typing import List, Tuple
 from http.cookies import SimpleCookie
 import requests
 
-
 try:
     from ptcookiechecker.modules.cookie_rules import COMMON_COOKIES
 except ImportError:
     from modules.cookie_rules import COMMON_COOKIES
 
 
-
 class CookieTester:
+
     def __init__(self):
         self.COMMON_COOKIES = COMMON_COOKIES
 
     def run(self, response, args, ptjsonlib: object, test_cookie_issues: bool = True, filter_cookie: str = None):
         self.ptjsonlib = ptjsonlib
         self.args = args
-        self.use_json = False
         self.filter_cookie = filter_cookie
         self.test_cookie_issues: bool = test_cookie_issues
         self.base_indent = 4
         self.duplicate_flags = None
+        self.use_json = False
         self.set_cookie_list: List[str] = self._get_set_cookie_headers(response)
 
         # Cookie injection tests
@@ -166,14 +165,14 @@ class CookieTester:
         result: list = []
         for cookie in self.COMMON_COOKIES:
             if "rules" in cookie and "value_format" in cookie["rules"]:
-                cookie_value_pattern = cookie["rules"]["value_format"] + "$" if not cookie["rules"]["value_format"].endswith('$') else cookie["rules"]["value_format"]
+                cookie_value_pattern = cookie["rules"]["value_format"]
                 if re.match(cookie_value_pattern, cookie_value):
                     result.append(cookie["description"])
         return result
 
     def _find_technology_by_cookie_name(self, cookie_name):
         for cookie in self.COMMON_COOKIES:
-            cookie_name_pattern = cookie["name"] + "$" if not cookie["name"].endswith('$') else cookie["name"]
+            cookie_name_pattern = cookie["name"]
             if re.match(cookie_name_pattern, cookie_name, re.IGNORECASE):
                 return (cookie.get("technology"), cookie["description"], "ERROR", "ERROR")
         return None
