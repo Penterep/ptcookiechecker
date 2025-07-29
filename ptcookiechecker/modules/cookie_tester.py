@@ -46,7 +46,7 @@ class CookieTester:
         self._bypass_cookiejar_restrictions(response, set_cookie_list=self.set_cookie_list)
 
         if not cookie_list and not self.set_cookie_list:
-            ptprinthelper.ptprint(f"Site returned no cookies", bullet_type="", condition=not self.use_json)
+            ptprinthelper.ptprint(f"Site returned no cookies", bullet_type="", condition=not self.use_json, indent=4)
             return
 
         for index, cookie in enumerate(cookie_list):
