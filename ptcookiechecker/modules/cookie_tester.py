@@ -27,7 +27,7 @@ class CookieTester:
         self.test_cookie_issues: bool = test_cookie_issues
         self.base_indent = 4
         self.duplicate_flags = None
-        self.use_json = False
+        self.use_json = args.json
         self.set_cookie_list: List[str] = self._get_set_cookie_headers(response)
 
         # Cookie injection tests
