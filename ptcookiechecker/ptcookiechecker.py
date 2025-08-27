@@ -28,12 +28,12 @@ import requests
 
 from _version import __version__
 from ptlibs import ptjsonlib, ptprinthelper, ptmisclib, ptnethelper
+from ptlibs.http.http_client import HttpClient
 
 from modules.cookie_tester import CookieTester
 
 
 class PtCookieChecker:
-
     def __init__(self, args):
         self.ptjsonlib   = ptjsonlib.PtJsonLib()
         self.use_json    = args.json
@@ -43,7 +43,9 @@ class PtCookieChecker:
 
     def run(self, args) -> None:
         response, dump = self.send_request(args.url)
-        CookieTester().run(response, args, self.ptjsonlib, test_cookie_issues=not args.list_cookies_only, filter_cookie=args.cookie_name)
+        self.cookie_tester = CookieTester()
+        self.cookie_tester.run(response, args, self.ptjsonlib, test_cookie_issues=not args.list_cookies_only, filter_cookie=args.cookie_name)
+
         self.ptjsonlib.set_status("finished")
         ptprinthelper.ptprint(self.ptjsonlib.get_result_json(), "", self.use_json)
 
@@ -67,6 +69,19 @@ def get_help():
         ]},
         {"options": [
             ["-u",  "--url",                    "<url>",               "Connect to URL"],
+            ["-ts", "--tests",                  "<test>",              "Specify one or more tests to perform:"],
+            ["",     "",                        "IDENT",               "Identify all cookies returned by the server with their attributes"],
+            ["",     "",                        "SECURE",              "Check if secure flag is present"],
+            ["",     "",                        "HTTPONLY",            "Check if HttpOnly flag is present"],
+            ["",     "",                        "SAMESITE",            "Check if SameSite flag is set to Lax or Strict"],
+            ["",     "",                        "PREFIX",              "Check if cookie has __Host- prefix"],
+            ["",     "",                        "DOMAIN",              "Check if cookie domain is not overscoped"],
+            ["",     "",                        "TECHNAME",            "Check if cookie name reveals technology"],
+            ["",     "",                        "TECHFORM",            "Check if cookie value format reveals technology"],
+            ["",     "",                        "ACCVAL",              "Check if server accepts arbitrary cookie values"],
+            ["",     "",                        "ACCURL",              "Check if server sets cookie from URL parameter"],
+            ["",     "",                        "FPD",                 "Check if empty or invalid value triggers FPD"],
+            ["", "", "", ""],
             ["-c", "--cookie-name",             "<cookie-name>",       "Parse only specific <cookie-name>"],
             ["-T",  "--timeout",                "<timeout>",           "Set timeout (defaults to 10)"],
             ["-a",  "--user-agent",             "<user-agent>",        "Set User-Agent header"],
@@ -82,9 +97,12 @@ def get_help():
 
 
 def parse_args():
+    available_tests = ["IDENT", "SECURE", "HTTPONLY", "SAMESITE", "PREFIX", "DOMAIN", "TECHNAME", "TECHFORM", "ACCVAL", "ACCURL", "FPD"]
     parser = argparse.ArgumentParser(add_help="False")
     parser.add_argument("-u",      "--url",               type=str, required=True)
+    parser.add_argument("-ts", "--tests",          type=lambda s: s.upper(), nargs="+", default=available_tests)
     parser.add_argument("-c",      "--cookie-name",       type=str)
+
     parser.add_argument("-p",      "--proxy",             type=str)
     parser.add_argument("-l",      "--list-cookies-only", action="store_true")
     parser.add_argument("-a",      "--user-agent",        type=str, default="Penterep Tools")
