@@ -25,6 +25,7 @@ class CookieTester:
         self.args.tests = getattr(args, "tests", [])
         self.ptjsonlib = ptjsonlib
         self.use_json = self.args.json
+        self.node_key: str = None
 
         self.filter_cookie: str = filter_cookie
         self.test_cookie_issues: bool = test_cookie_issues
@@ -32,6 +33,7 @@ class CookieTester:
         self.set_cookie_list: List[str] = self._get_set_cookie_headers(response)
         self.cookie_names_list = []
         self.base_indent = 4
+
 
         if self.args.tests:
             self.test_cookie_issues = True
@@ -94,6 +96,9 @@ class CookieTester:
                     },
                     vulnerabilities=[]
                 )
+
+                if self.filter_cookie:
+                    self.node_key = node["key"]
                 self.ptjsonlib.add_node(node)
 
             ptprinthelper.ptprint(f'Name:   {ptprinthelper.get_colored_text(cookie.name, "TITLE")}', condition=not self.use_json, newline_above=True if index > 0 else False, indent=self.base_indent)
@@ -117,16 +122,16 @@ class CookieTester:
                     if cookie.name in cookie_injection_from_headers:
                         ptprinthelper.ptprint(f"Application accepts any value from cookie", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent+4))
                         vuln_code = "PTV-WEB-LSCOO-REFUSE"
-                        self.ptjsonlib.add_vulnerability(vuln_code)
+                        self.ptjsonlib.add_vulnerability(vuln_code, node_key=self.node_key)
 
                 if "ACCURL" in self.args.tests:
                     vuln_code = "PTV-WEB-LSCOO-URLSET"
                     if cookie.name in cookie_acceptance_from_get_params:
                         ptprinthelper.ptprint(f"Application accepts cookie value from GET parameter", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent+4))
-                        self.ptjsonlib.add_vulnerability(vuln_code)
+                        self.ptjsonlib.add_vulnerability(vuln_code, node_key=self.node_key)
                     if cookie.name in cookie_injection_from_get_params:
                         ptprinthelper.ptprint(f"Application sets any value passed in GET parameter into the cookie ", bullet_type="WARNING", condition=not self.use_json, indent=(self.base_indent+4))
-                        self.ptjsonlib.add_vulnerability(vuln_code)
+                        self.ptjsonlib.add_vulnerability(vuln_code, node_key=self.node_key)
 
             ptprinthelper.ptprint(f"Domain: {cookie_domain}", bullet_type="TEXT", condition=not self.use_json, indent=self.base_indent)
 
@@ -217,33 +222,32 @@ class CookieTester:
             technology_name, message, json_code, bullet_type = result
             ptprinthelper.ptprint(f"Cookie has default name for {message}", bullet_type=bullet_type, condition=not self.use_json, colortext=False, indent=self.base_indent+4)
             vuln_code = "PTV-WEB-INFO-TEDEFNAME"
-            self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
+            self.ptjsonlib.add_vulnerability(vuln_code, node_key=self.node_key) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
 
     def check_host_prefix(self, cookie_name: str):
         if not cookie_name.startswith("__Host-"):
             ptprinthelper.ptprint(f"Cookie is missing '__Host-' prefix", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
             vuln_code = "PTV-WEB-LSCOO-HOSTPREF"
-            self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
+            self.ptjsonlib.add_vulnerability(vuln_code, node_key=self.node_key) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
 
     def check_cookie_value(self, cookie_value: str):
         result = self._find_technology_by_cookie_value(cookie_value)
         if result:
             vuln_code = "PTV-WEB-INFO-TEDEFFORM"
-            self.ptjsonlib.add_vulnerability(vuln_code)
+            self.ptjsonlib.add_vulnerability(vuln_code, node_key=self.node_key)
             ptprinthelper.ptprint(f"Cookie value has default format of {', '.join(result) if len(result) > 1 else result[0]}", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
             #self.ptjsonlib.add_vulnerability(vuln_code) if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
 
     def check_cookie_domain(self, cookie_domain: str):
         if cookie_domain.startswith("."):
             vuln_code = "PTV-WEB-LSCOO-DOMAIN"
-            self.ptjsonlib.add_vulnerability(vuln_code)
+            self.ptjsonlib.add_vulnerability(vuln_code, node_key=self.node_key)
             ptprinthelper.ptprint(f"Overscoped cookie issue", bullet_type="WARNING", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
-
 
     def check_cookie_httponly_flag(self, cookie_http_flag):
         if not cookie_http_flag:
             vuln_code = "PTV-WEB-LSCOO-FLHTTP"
-            self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
+            self.ptjsonlib.add_vulnerability(vuln_code, node_key=self.node_key) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
             ptprinthelper.ptprint(f"HttpOnly flag missing", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
         else:
             if "httponly" in self.duplicate_flags:
@@ -254,7 +258,7 @@ class CookieTester:
     def check_cookie_samesite_flag(self, cookie_samesite_flag):
         if not cookie_samesite_flag:
             vuln_code = "PTV-WEB-LSCOO-FLSAME"
-            self.ptjsonlib.add_vulnerability(vuln_code) # if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
+            self.ptjsonlib.add_vulnerability(vuln_code, node_key=self.node_key) # if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
             ptprinthelper.ptprint(f"SameSite flag missing", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
         else:
             if "samesite" in self.duplicate_flags:
@@ -266,7 +270,7 @@ class CookieTester:
     def check_cookie_secure_flag(self, cookie_secure_flag):
         if not cookie_secure_flag:
             vuln_code = "PTV-WEB-LSCOO-FLSEC"
-            self.ptjsonlib.add_vulnerability(vuln_code) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
+            self.ptjsonlib.add_vulnerability(vuln_code, node_key=self.node_key) #if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
             ptprinthelper.ptprint(f"Secure flag missing", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+4)
         else:
             if "secure" in self.duplicate_flags:
@@ -479,6 +483,7 @@ class CookieTester:
                     note=note,
                     vuln_request=dump["request"],
                     vuln_response=dump["response"],
+                    node_key=self.node_key
                 )
                 ptprinthelper.ptprint(
                     note,
