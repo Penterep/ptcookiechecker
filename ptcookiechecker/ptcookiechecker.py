@@ -52,8 +52,12 @@ class PtCookieChecker:
     def send_request(self, url: str) -> requests.models.Response:
         ptprinthelper.ptprint(f"Testing cookies for URL: {url}", bullet_type="TITLE", condition=not self.use_json, flush=True, colortext=True, end=" ")
         try:
-            response, response_dump = ptmisclib.load_url_from_web_or_temp(url, method="GET", headers=self.args.headers, proxies=self.args.proxy, timeout=self.timeout, redirects=True, verify=False, cache=self.cache, dump_response=True)
+            response, response_dump = ptmisclib.load_url_from_web_or_temp(url, method="GET", headers=self.args.headers, proxies=self.args.proxy, timeout=self.timeout, redirects=self.args.redirects, verify=False, cache=self.cache, dump_response=True)
             ptprinthelper.ptprint(f"[{response.status_code}]", condition=not self.use_json, colortext=False)
+            if response.is_redirect:
+                location = response.headers.get('Location', 'unknown')
+                ptprinthelper.ptprint(f"Redirect detected: {location}, status: {response.status_code}", "ADDITIONS", not self.use_json, colortext=True, indent=4)
+
             return response, response_dump
         except requests.RequestException:
             ptprinthelper.ptprint(f"[error]", condition=not self.use_json, colortext=False)
@@ -83,11 +87,12 @@ def get_help():
             ["",     "",                        "FPD",                 "Check if empty or invalid value triggers FPD"],
             ["", "", "", ""],
             ["-c", "--cookie-name",             "<cookie-name>",       "Parse only specific <cookie-name>"],
+            ["-l",  "--list-cookies-only",      "",                    "Print cookies without testing for vulnerabilities"],
             ["-T",  "--timeout",                "<timeout>",           "Set timeout (defaults to 10)"],
             ["-a",  "--user-agent",             "<user-agent>",        "Set User-Agent header"],
             ["-H",  "--headers",                "<header:value>",      "Set custom header(s)"],
             ["-p",  "--proxy",                  "<proxy>",             "Set proxy (e.g. http://127.0.0.1:8080)"],
-            ["-l",  "--list-cookies-only",      "<list-cookies-only>", "Return cookies without vulnerabilities"],
+            ["-r",  "--redirects",              "",                    "Follow redirects"],
             ["-C",  "--cache",                  "",                    "Cache requests (load from tmp in future)"],
             ["-v",  "--version",                "",                    "Show script version and exit"],
             ["-h",  "--help",                   "",                    "Show this help message and exit"],
@@ -100,9 +105,8 @@ def parse_args():
     available_tests = ["IDENT", "SECURE", "HTTPONLY", "SAMESITE", "PREFIX", "DOMAIN", "TECHNAME", "TECHFORM", "ACCVAL", "ACCURL", "FPD"]
     parser = argparse.ArgumentParser(add_help="False")
     parser.add_argument("-u",      "--url",               type=str, required=True)
-    parser.add_argument("-ts", "--tests",          type=lambda s: s.upper(), nargs="+", default=available_tests)
+    parser.add_argument("-ts",     "--tests",             type=lambda s: s.upper(), nargs="+", default=available_tests)
     parser.add_argument("-c",      "--cookie-name",       type=str)
-
     parser.add_argument("-p",      "--proxy",             type=str)
     parser.add_argument("-l",      "--list-cookies-only", action="store_true")
     parser.add_argument("-a",      "--user-agent",        type=str, default="Penterep Tools")
@@ -110,6 +114,7 @@ def parse_args():
     parser.add_argument("-H",      "--headers",           type=ptmisclib.pairs, nargs="+")
     parser.add_argument("-j",      "--json",              action="store_true")
     parser.add_argument("-C",      "--cache",             action="store_true")
+    parser.add_argument("-r",      "--redirects",         action="store_true")
     parser.add_argument("-v",      "--version",           action="version", version=f"{SCRIPTNAME} {__version__}")
 
     parser.add_argument("--socket-address",          type=str, default=None)

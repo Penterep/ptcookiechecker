@@ -23,6 +23,7 @@ class CookieTester:
     def run(self, response, args, ptjsonlib: object, test_cookie_issues: bool = True, filter_cookie: str = None):
         self.args = args
         self.args.tests = getattr(args, "tests", [])
+        self.args.tests = getattr(args, "redirects", False)
         self.ptjsonlib = ptjsonlib
         self.use_json = self.args.json
         self.node_key: str = None
@@ -305,7 +306,7 @@ class CookieTester:
 
         extracted_cookies: List[Tuple] = self._extract_cookie_names_and_values(set_cookie_list=self.set_cookie_list)
         cookies_to_send = {cookie[0]: ''.join(random.choices(string.ascii_letters+string.digits, k=len(cookie[1]) if len(cookie[1]) >= 1 else 10)) for cookie in extracted_cookies}
-        response = requests.get(url=url, cookies=cookies_to_send, headers=self.args.headers, proxies=self.args.proxy, verify=False, allow_redirects=False)
+        response = requests.get(url=url, cookies=cookies_to_send, headers=self.args.headers, proxies=self.args.proxy, verify=False, allow_redirects=self.args.redirects)
 
         cookies_list1 = [cookie[0] for cookie in extracted_cookies]
         cookies_list2 = [cookie[0] for cookie in self._extract_cookie_names_and_values(self._get_set_cookie_headers(response))]
@@ -318,7 +319,7 @@ class CookieTester:
         cookies_to_send = {cookie_name: cookie_value for cookie_name, cookie_value in extracted_cookies}
 
         # Send request with cookies in GET query
-        response = requests.get(url, params=cookies_to_send, headers=self.args.headers, proxies=self.args.proxy, verify=False, allow_redirects=False)
+        response = requests.get(url, params=cookies_to_send, headers=self.args.headers, proxies=self.args.proxy, verify=False, allow_redirects=self.args.redirects)
         response_cookie_names = [c[0] for c in self._extract_cookie_names_and_values(self._get_set_cookie_headers(response))]
         vuln_cookies = [cookie_name for cookie_name, _ in extracted_cookies if cookie_name not in response_cookie_names]
         return vuln_cookies
@@ -329,7 +330,7 @@ class CookieTester:
         cookies_to_send = {cookie_name: ''.join(random.choices(string.ascii_letters + string.digits, k=len(cookie_value) if len(cookie_value) >= 1 else 10)) for cookie_name, cookie_value in extracted_cookies}
 
         # Send request with cookies in GET query
-        response = requests.get(url, params=cookies_to_send, proxies=self.args.proxy, verify=False, allow_redirects=False)
+        response = requests.get(url, params=cookies_to_send, proxies=self.args.proxy, verify=False, allow_redirects=self.args.redirects)
         response_cookies = self._extract_cookie_names_and_values(self._get_set_cookie_headers(response))
 
         vuln_cookies = [cookie_name for cookie_name, cookie_value in response_cookies if cookie_value == cookies_to_send.get(cookie_name)]
