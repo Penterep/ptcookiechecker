@@ -21,7 +21,6 @@
 import argparse
 import re
 import sys; sys.path.append(__file__.rsplit("/", 1)[0])
-
 import urllib
 
 import requests
@@ -45,7 +44,6 @@ class PtCookieChecker:
         response, dump = self.send_request(args.url)
         self.cookie_tester = CookieTester()
         self.cookie_tester.run(response, args, self.ptjsonlib, test_cookie_issues=not args.list_cookies_only, filter_cookie=args.cookie_name)
-
         self.ptjsonlib.set_status("finished")
         ptprinthelper.ptprint(self.ptjsonlib.get_result_json(), "", self.use_json)
 
@@ -53,11 +51,10 @@ class PtCookieChecker:
         ptprinthelper.ptprint(f"Testing cookies for URL: {url}", bullet_type="TITLE", condition=not self.use_json, flush=True, colortext=True, end=" ")
         try:
             response, response_dump = ptmisclib.load_url_from_web_or_temp(url, method="GET", headers=self.args.headers, proxies=self.args.proxy, timeout=self.timeout, redirects=self.args.redirects, verify=False, cache=self.cache, dump_response=True)
-            ptprinthelper.ptprint(f"[{response.status_code}]", condition=not self.use_json, colortext=False)
-            if response.is_redirect:
-                location = response.headers.get('Location', 'unknown')
-                ptprinthelper.ptprint(f"Redirect detected: {location}, status: {response.status_code}", "ADDITIONS", not self.use_json, colortext=True, indent=4)
-
+            ptprinthelper.ptprint(f"[{response.history[0].status_code if response.history else response.status_code}]", condition=not self.use_json, colortext=False)
+            if response.is_redirect or (self.args.redirects and response.history):
+                final_url = response.url if response.history else response.headers.get('location', 'unknown')
+                ptprinthelper.ptprint(f"Redirect detected ({'not ' if not self.args.redirects else ''}following): {final_url} {'['+str(response.status_code)+']' if self.args.redirects else ''}", "ADDITIONS", not self.use_json, colortext=True, indent=4)
             return response, response_dump
         except requests.RequestException:
             ptprinthelper.ptprint(f"[error]", condition=not self.use_json, colortext=False)
@@ -84,6 +81,7 @@ def get_help():
             ["",     "",                        "TECHFORM",            "Check if cookie value format reveals technology"],
             ["",     "",                        "ACCVAL",              "Check if server accepts arbitrary cookie values"],
             ["",     "",                        "ACCURL",              "Check if server sets cookie from URL parameter"],
+            ["",     "",                        "FROMURL",             ""],
             ["",     "",                        "FPD",                 "Check if empty or invalid value triggers FPD"],
             ["", "", "", ""],
             ["-c", "--cookie-name",             "<cookie-name>",       "Parse only specific <cookie-name>"],
@@ -102,7 +100,7 @@ def get_help():
 
 
 def parse_args():
-    available_tests = ["IDENT", "SECURE", "HTTPONLY", "SAMESITE", "PREFIX", "DOMAIN", "TECHNAME", "TECHFORM", "ACCVAL", "ACCURL", "FPD"]
+    available_tests = ["IDENT", "SECURE", "HTTPONLY", "SAMESITE", "PREFIX", "DOMAIN", "TECHNAME", "TECHFORM", "ACCVAL", "ACCURL", "FROMURL", "FPD"]
     parser = argparse.ArgumentParser(add_help="False")
     parser.add_argument("-u",      "--url",               type=str, required=True)
     parser.add_argument("-ts",     "--tests",             type=lambda s: s.upper(), nargs="+", default=available_tests)
