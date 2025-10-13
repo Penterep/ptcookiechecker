@@ -11,7 +11,7 @@ COMMON_COOKIES = [
         "description": "Java session cookie",
         "category": "SESSION",
         "severity": "ERROR",
-        "rules": {"value_format": r"^[a-z0-9]{32}$"},
+        "rules": {"value_format": r"^[A-Z0-9]{32}$"},
     },
     {
         "name": "Lang",
