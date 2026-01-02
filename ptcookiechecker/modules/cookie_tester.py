@@ -45,7 +45,8 @@ class CookieTester:
         #    self.test_cookie_issues = True
 
         # Print Set-Cookie:
-        for header, value in response.raw.headers.items():
+        headers: dict = getattr(response.raw, 'headers', response.headers)
+        for header, value in headers.items():
             if header.lower() == "set-cookie":
                 ptprinthelper.ptprint(ptprinthelper.get_colored_text(f"Set-Cookie: {value}", "ADDITIONS"), colortext="WARNING", condition=not self.use_json, indent=(self.base_indent))
 
@@ -285,8 +286,9 @@ class CookieTester:
     def _get_set_cookie_headers(self, response):
         """Returns Set-Cookie headers from <response.raw.headers>"""
         raw_cookies: list = []
-        if [h for h in response.raw.headers.keys() if h.lower() == "set-cookie"]:
-            for header, value in response.raw.headers.items():
+        headers: dict = getattr(response.raw, 'headers', response.headers)
+        if [h for h in headers.headers.keys() if h.lower() == "set-cookie"]:
+            for header, value in headers.items():
                 if header.lower() == "set-cookie":
                     raw_cookies.append(f"{header}: {value}")
         return raw_cookies
