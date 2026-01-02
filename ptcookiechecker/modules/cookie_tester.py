@@ -57,7 +57,6 @@ class CookieTester:
             ptprinthelper.ptprint(f"Site returned no cookies", bullet_type="", condition=not self.use_json, indent=4)
             return
 
-
         if self.test_cookie_issues:
             if "ACCVAL" in self.args.tests:
                 cookie_injection_from_headers: list = self.check_cookie_injection_from_headers(url=response.url)
@@ -70,7 +69,6 @@ class CookieTester:
 
             if "FROMURL" in self.args.tests:
                 fromurl_test_vuln_cookies: list = self._run_fromurl_test(url=response.url)
-
 
         for index, cookie in enumerate(cookie_list):
             if self.filter_cookie and (self.filter_cookie.lower() != cookie.name.lower()):
@@ -172,6 +170,7 @@ class CookieTester:
                             indent=(self.base_indent+8)
                         )
 
+                #if len(cookie.value) > 20:
                 self._run_sid_reflection_in_response_test(cookie.name, cookie.value)
 
                 if "FPD" in self.args.tests:
@@ -210,31 +209,28 @@ class CookieTester:
         Returns list of cookie names whose values were exactly reflected.
         """
 
-        extracted_cookies = self._extract_cookie_names_and_values(set_cookie_list=self.set_cookie_list) # all cookies
-        cookies_to_send   = {cookie_name: cookie_value for cookie_name, cookie_value in extracted_cookies} # all cookies
+        extracted_cookies = self._extract_cookie_names_and_values(set_cookie_list=self.set_cookie_list) # all received cookies
+        cookies_to_send   = {cookie_name: "foo" for cookie_name, cookie_value in extracted_cookies} # all received cookies
+
 
         # Send request with cookies in GET query
         response = self.http_client.send_request(url, params=cookies_to_send, headers=self.args.headers, proxies=self.args.proxy, verify=False, allow_redirects=self.args.redirects)
+
         #response_cookie_names = [c[0] for c in self._extract_cookie_names_and_values(self._get_set_cookie_headers(response))]
-        response_cookies = self._extract_cookie_names_and_values(self._get_set_cookie_headers(response))
+        response_cookies: tuple = self._extract_cookie_names_and_values(self._get_set_cookie_headers(response))
         response_cookie_values = [c[1] for c in response_cookies if c[1]]
 
         vuln_cookies = []
+        for cookie_name, value in response_cookies:
+            if value == "foo":
+                vuln_cookies.append(cookie_name)
 
-        for name, value in extracted_cookies:
-            if not value:
-                continue
-
-            value_lc = str(value).lower()
-
-            # check if the value appears in any Set-Cookie header
-            if any(value_lc in h.lower() for h in response_cookie_values):
-                vuln_cookies.append(name)
 
         return vuln_cookies
 
     def _run_sid_reflection_in_response_test(self, cookie_name, cookie_value):
-        cookies = {cookie_name: cookie_value + "FOO"}
+        cookie_value += "FOO"
+        cookies = {cookie_name: cookie_value}
         try:
             headers_with_cookie = dict(self.args.headers or {})
             cookie_header_value = "; ".join(f"{k}={v}" for k, v in cookies.items())
@@ -246,12 +242,12 @@ class CookieTester:
                 headers=headers_with_cookie,
                 proxies=self.args.proxy,
                 timeout=self.args.timeout,
-                redirects=False,
+                allow_redirects=False,
                 verify=False,
                 cache=self.args.cache
             )
 
-            if response and response.text:
+            if response is not None and response.text:
                 pattern = re.escape(cookie_value)
                 if re.search(pattern, response.text, re.IGNORECASE):
                     ptprinthelper.ptprint(
@@ -549,7 +545,7 @@ class CookieTester:
                     headers=headers_with_cookie,
                     proxies=self.args.proxy,
                     timeout=self.args.timeout,
-                    redirects=False,
+                    allow_redirects=False,
                     verify=False,
                     cache=self.args.cache,
                 )
