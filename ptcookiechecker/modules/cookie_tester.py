@@ -287,7 +287,7 @@ class CookieTester:
         """Returns Set-Cookie headers from <response.raw.headers>"""
         raw_cookies: list = []
         headers: dict = getattr(response.raw, 'headers', response.headers)
-        if [h for h in headers.headers.keys() if h.lower() == "set-cookie"]:
+        if [h for h in headers.keys() if h.lower() == "set-cookie"]:
             for header, value in headers.items():
                 if header.lower() == "set-cookie":
                     raw_cookies.append(f"{header}: {value}")
