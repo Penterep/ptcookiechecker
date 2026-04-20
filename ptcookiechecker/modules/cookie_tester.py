@@ -365,16 +365,20 @@ class CookieTester:
                 ptprinthelper.ptprint(f"HttpOnly present", bullet_type="OK", condition=not self.use_json, colortext=False, indent=self.base_indent+8)
 
     def check_cookie_samesite_flag(self, cookie_samesite_flag):
+        vuln_code = "PTV-WEB-LSCOO-FLSAME"
         if not cookie_samesite_flag:
-            vuln_code = "PTV-WEB-LSCOO-FLSAME"
             self.ptjsonlib.add_vulnerability(vuln_code, node_key=self.node_key) # if args.cookie_name else node["vulnerabilities"].append({"vulnCode": vuln_code})
             ptprinthelper.ptprint(f"SameSite missing", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+8)
         else:
-            if "samesite" in self.duplicate_flags:
+            normalized_samesite = str(cookie_samesite_flag).strip().lower()
+            display_samesite = normalized_samesite.capitalize() if normalized_samesite in {"lax", "strict", "none"} else cookie_samesite_flag
+            if normalized_samesite not in {"lax", "strict"}:
+                self.ptjsonlib.add_vulnerability(vuln_code, node_key=self.node_key)
+                ptprinthelper.ptprint(f"SameSite={display_samesite}", bullet_type="VULN", condition=not self.use_json, colortext=False, indent=self.base_indent+8)
+            elif "samesite" in self.duplicate_flags:
                 ptprinthelper.ptprint(f"SameSite duplicate", bullet_type="WARNING", condition=not self.use_json, colortext=False, indent=self.base_indent+8)
             else:
-                _bullet = "OK" if not cookie_samesite_flag.lower() == "none" else "WARNING"
-                ptprinthelper.ptprint(f"SameSite={cookie_samesite_flag}", bullet_type=_bullet, condition=not self.use_json, colortext=False, indent=self.base_indent+8)
+                ptprinthelper.ptprint(f"SameSite={display_samesite}", bullet_type="OK", condition=not self.use_json, colortext=False, indent=self.base_indent+8)
 
     def check_cookie_secure_flag(self, cookie_secure_flag):
         if not cookie_secure_flag:
