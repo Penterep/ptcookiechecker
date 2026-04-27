@@ -20,6 +20,8 @@ except ImportError:
 
 
 class CookieTester:
+    VALID_SAMESITE_VALUES = {"lax", "strict", "none"}
+
     def __init__(self):
         self.COMMON_COOKIES = COMMON_COOKIES
 
@@ -102,7 +104,7 @@ class CookieTester:
                         "name": cookie.name,
                         "is_web_cookie_secure_flag": cookie_secure_flag,
                         "is_web_cookie_http_only_flag": cookie_http_flag,
-                        "web_cookie_same_site_flag": cookie_samesite_flag.lower() if cookie_samesite_flag else False,
+                        "web_cookie_same_site_flag": self._get_samesite_json_value(cookie_samesite_flag),
                         "path": cookie_path,
                         "domain": cookie_domain,
                         "description": full_cookie
@@ -277,6 +279,13 @@ class CookieTester:
             attribute_counts[key] = attribute_counts.get(key, 0) + 1
         duplicates = {key.lower(): count for key, count in attribute_counts.items() if count > 1}
         return list(duplicates.keys())
+
+    def _get_samesite_json_value(self, cookie_samesite_flag):
+        if not cookie_samesite_flag:
+            return False
+
+        normalized_samesite = str(cookie_samesite_flag).strip().lower()
+        return normalized_samesite if normalized_samesite in self.VALID_SAMESITE_VALUES else "invalid"
 
     def _find_cookie_in_headers(self, cookie_list: list, cookie_to_find: str):
         for cookie in cookie_list:
